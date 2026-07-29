@@ -49,7 +49,7 @@ import random
 import torch
 import yaml
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 # Point this at wherever the repo lives in this Kaggle session (see the
@@ -163,6 +163,19 @@ NUM_ENVS = 4  # Kaggle notebooks typically get 4 CPU cores
 VecEnvCls = SubprocVecEnv if NUM_ENVS > 1 else DummyVecEnv
 env = VecEnvCls([make_env(i) for i in range(NUM_ENVS)])
 
+# The reward weights (overlap_area=100, hpwl=1, out_of_bounds=50, each
+# multiplied by areas in mm^2) produce per-episode returns in the 1e5-1e6
+# range. PPO's loss combines policy_loss + vf_coef*value_loss — with value
+# targets that large, value_loss dwarfs the policy gradient term, so the
+# optimizer step is almost entirely about the critic and the actor barely
+# moves. Caught from a real run: explained_variance stuck at ~0 and the
+# Gaussian policy's std frozen at exactly 1.0 for 100k+ steps even after
+# fixing the action-space normalization (see PCBPlacementEnv). Normalizing
+# only the reward (not observations — node_embeddings/masks/occupancy
+# already have sensible ranges, and normalizing binary masks would be
+# actively wrong) brings value_loss down to a well-conditioned scale.
+env = VecNormalize(env, norm_obs=False, norm_reward=True, clip_reward=10.0)
+
 rl_cfg = default_config["placement_rl"]
 model, _encoder_unused = build_ppo_agent(
     env,
@@ -207,6 +220,10 @@ model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=checkpoint_callback)
 # ==============================================================================
 final_path = "/kaggle/working/checkpoints/ppo_pcb_placement_best"
 model.save(final_path)
+# VecNormalize's running reward statistics — needed to resume training
+# with the same normalization; not needed just to run inference with the
+# saved policy, since only actions (not rewards) are used at deployment.
+env.save("/kaggle/working/checkpoints/vecnormalize_stats.pkl")
 print(f"Saved Stage 2 policy to {final_path}.zip")
 """,
     ),
