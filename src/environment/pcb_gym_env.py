@@ -16,7 +16,12 @@ exactly once, in a fixed order, one component per step:
     net-topology-aware embedding is so the placement policy can reason
     about a component relative to the rest of the board, which a
     single-node observation would throw away.
-  - Action: continuous (x, y, theta) in board coordinates / radians.
+  - Action: continuous, normalized to [-1, 1]^3; `step()` rescales to real
+    (x, y, theta) board coordinates / radians. Normalized rather than
+    raw board-coordinate bounds because SB3's default Gaussian policy
+    starts at mean~0, std=1 — against a [0, board_width] range nearly
+    every initial sample would be negative and clip straight to the
+    (0, 0) corner with no gradient to ever move away from it.
   - Reward: dense, paid out incrementally so summing it over the episode
     equals the full-board objective exactly once each:
       - overlap: only between the just-placed component and previously
@@ -105,10 +110,16 @@ class PCBPlacementEnv(gym.Env):
         self.grid_w = max(1, int(math.ceil(self.board_width / self.grid_res)))
         self.grid_h = max(1, int(math.ceil(self.board_height / self.grid_res)))
 
-        self.action_space = spaces.Box(
-            low=np.array([0.0, 0.0, -math.pi], dtype=np.float32),
-            high=np.array([self.board_width, self.board_height, math.pi], dtype=np.float32),
-        )
+        # Normalized to [-1, 1]^3, not real board coordinates directly.
+        # SB3's default continuous policy is a Gaussian starting at mean~0,
+        # std=1 — against an UN-normalized [0, board_width] range, nearly
+        # every raw sample is negative and gets clipped straight to the
+        # (0, 0) corner regardless of what the policy actually outputs,
+        # which gives zero gradient signal to ever move away from it (the
+        # clip has no gradient). Against this symmetric range, a std=1
+        # Gaussian's mass actually spans a useful chunk of the board from
+        # step one. `step()` rescales to real coordinates.
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
                 "node_embeddings": spaces.Box(
@@ -218,9 +229,13 @@ class PCBPlacementEnv(gym.Env):
         if self.step_index >= len(self.order):
             raise RuntimeError("step() called after episode already terminated; call reset() first")
 
-        x = float(np.clip(action[0], 0.0, self.board_width))
-        y = float(np.clip(action[1], 0.0, self.board_height))
-        theta = float(action[2])
+        # rescale from the normalized [-1, 1]^3 action_space to real board
+        # coordinates; still clip defensively since a Gaussian's tails can
+        # land slightly outside [-1, 1]
+        clipped = np.clip(action, -1.0, 1.0)
+        x = float((clipped[0] + 1.0) / 2.0 * self.board_width)
+        y = float((clipped[1] + 1.0) / 2.0 * self.board_height)
+        theta = float(clipped[2] * math.pi)
 
         comp_id = self.order[self.step_index]
         comp = self._components[comp_id]
