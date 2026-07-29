@@ -97,21 +97,40 @@ def positive_pairs(edge_index: torch.Tensor) -> torch.Tensor:
 
 
 def sample_negative_pairs(num_nodes: int, positive: torch.Tensor, num_samples: int) -> torch.Tensor:
-    """Uniform random (i, j) pairs with i != j that aren't in `positive`."""
+    """Uniform random (i, j) pairs with i != j that aren't in `positive`.
+
+    Small, densely-connected graphs are common here: a shared VCC/GND rail
+    alone can make every component pair "positive", leaving zero valid
+    negatives. Rejection sampling for more negatives than actually exist
+    would loop forever, so the request is capped at the true number
+    available; `_batched_link_prediction`/`link_prediction_loss` both
+    already tolerate fewer (or zero) negatives for a given graph.
+    """
     positive_set = {(int(i), int(j)) for i, j in positive.t().tolist()}
     positive_set |= {(j, i) for i, j in positive_set}
 
+    max_available = max(0, num_nodes * (num_nodes - 1) - len(positive_set))
+    num_samples = min(num_samples, max_available)
+    if num_samples == 0:
+        return torch.zeros((2, 0), dtype=torch.long)
+
     out = []
-    while len(out) < num_samples:
-        i = torch.randint(0, num_nodes, (num_samples * 2,))
-        j = torch.randint(0, num_nodes, (num_samples * 2,))
+    seen = set()
+    max_attempts = max(1000, num_samples * 50)
+    attempts = 0
+    while len(out) < num_samples and attempts < max_attempts:
+        batch = min(num_samples * 2, 256)
+        i = torch.randint(0, num_nodes, (batch,))
+        j = torch.randint(0, num_nodes, (batch,))
         for a, b in zip(i.tolist(), j.tolist()):
-            if a == b or (a, b) in positive_set:
+            attempts += 1
+            if a == b or (a, b) in positive_set or (a, b) in seen:
                 continue
+            seen.add((a, b))
             out.append((a, b))
             if len(out) >= num_samples:
                 break
-    return torch.tensor(out[:num_samples], dtype=torch.long).t()
+    return torch.tensor(out, dtype=torch.long).t() if out else torch.zeros((2, 0), dtype=torch.long)
 
 
 def link_prediction_loss(
