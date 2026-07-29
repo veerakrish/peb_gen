@@ -1,0 +1,15 @@
+[project]
+name = "pcb_gen"
+version = "0.1.0"
+description = "Schematic-to-PCB layout generation (graph encoding, placement, routing)"
+requires-python = ">=3.11"
+dependencies = [
+    "networkx",
+    "sexpdata",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

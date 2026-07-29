@@ -1,0 +1,16 @@
+networkx
+sexpdata
+pytest
+pyyaml
+numpy
+torch
+torch_geometric
+gymnasium
+stable-baselines3
+shapely
+onnx
+scikit-learn
+fastapi
+uvicorn[standard]
+pydantic
+httpx

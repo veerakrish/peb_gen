@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# generated/trained artifacts — regenerable from the scripts and source
+# data that ARE committed (data/synthetic_generator.py,
+# data/real_netlist_harvester.py, src/pipelines/train_encoder.py)
+data/raw/
+data/processed/
+checkpoints/
+*.kicad_pcb
+
+# runtime output, not source
+webapp/backend/output/
+
+# frontend build artifacts
+webapp/frontend/node_modules/
+webapp/frontend/dist/
+
+# Kaggle/notebook execution output
+kaggle/tb_logs/

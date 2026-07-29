@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: webapp/backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # matches the real OUTPUT_ROOT in webapp/backend/app/main.py
+      # (os.path.dirname(__file__)/../output => webapp/backend/output)
+      - ./webapp/backend/output:/app/webapp/backend/output
+    environment:
+      - ENVIRONMENT=production
+
+  frontend:
+    build:
+      context: ./webapp/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend

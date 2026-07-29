@@ -1,0 +1,79 @@
+# Board geometry, model hyperparameters, and reward weights shared across
+# the synthetic generator, Stage 1 encoder training, and Stage 2 RL training.
+
+board:
+  width_mm: 50.0
+  height_mm: 50.0
+  grid_resolution_mm: 0.5      # occupancy grid cell size for the RL observation
+  min_clearance_mm: 0.2        # minimum required gap between component bounding boxes
+
+encoder:
+  # Stage 1: Graph Transformer link-prediction pretraining
+  embedding_dim: 128
+  hidden_dim: 256
+  num_layers: 4
+  num_heads: 8
+  max_nodes: 40   # Stage 2 env pads/masks node_embeddings to this component count per board
+  dropout: 0.1
+  node_categories:             # module category encoding (one-hot input feature)
+    # drone-specific, from data/synthetic_generator.py
+    - MCU
+    - ESC
+    - GPS
+    - PDB
+    - IMU
+    - RX
+    - CONNECTOR
+    - PASSIVE
+    # generic real-component categories, from data/real_netlist_harvester.py
+    - IC
+    - TRANSISTOR
+    - DIODE
+    - SWITCH
+    - CRYSTAL
+  pin_types:
+    - power
+    - ground
+    - signal
+    - high_speed
+  training:
+    epochs: 50
+    batch_size: 64
+    optimizer: AdamW
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    scheduler: CosineAnnealingLR
+    negative_sampling_ratio: 1.0   # negative net-pairs per positive pair
+    val_split: 0.2
+    checkpoint_dir: "checkpoints"   # local dir; on Kaggle pass --checkpoint-dir /kaggle/working
+    use_amp: true
+
+placement_rl:
+  # Stage 2: PPO spatial placement policy
+  algorithm: PPO
+  policy: MultiInputPolicy
+  total_timesteps: 2_000_000
+  n_envs: 8
+  n_steps: 2048
+  batch_size: 256
+  n_epochs: 10
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  max_episode_steps: 256        # one placement action per component, plus retries
+  checkpoint_path: "/kaggle/working/ppo_pcb_placement.zip"
+  tensorboard_log: "/kaggle/working/tb_logs"
+
+reward_weights:
+  overlap_area: 100.0
+  hpwl: 1.0
+  out_of_bounds: 50.0
+
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  synthetic_output_dir: "data/raw/synthetic"
+
+seed: 42

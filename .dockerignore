@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+node_modules/
+data/raw/
+data/processed/
+checkpoints/
+webapp/backend/output/
+webapp/frontend/dist/
+webapp/frontend/node_modules/
+*.kicad_pcb
